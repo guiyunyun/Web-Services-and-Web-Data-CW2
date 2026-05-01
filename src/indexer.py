@@ -1,12 +1,17 @@
 """Inverted index builder for the search engine."""
 
+import os
 import re
+import json
 import math
+import pickle
 import logging
 from datetime import datetime
 from typing import Optional
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_INDEX_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
 
 STOP_WORDS = frozenset({
     "a", "an", "the", "and", "or", "but", "not", "no", "nor",
@@ -126,3 +131,65 @@ class Indexer:
     def get_document_text(self, url: str) -> str:
         """Return the stored text for a document URL."""
         return self.documents.get(url, "")
+
+    def save(self, path: Optional[str] = None, fmt: str = "json") -> str:
+        """Save index to file. Returns the file path used."""
+        if path is None:
+            extension = "pkl" if fmt == "pickle" else "json"
+            path = os.path.join(DEFAULT_INDEX_DIR, f"index.{extension}")
+
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        data = self.get_full_index()
+
+        if fmt == "pickle":
+            with open(path, "wb") as f:
+                pickle.dump(data, f)
+        else:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+
+        logger.info("Index saved to %s (%s format)", path, fmt)
+        return path
+
+    def load(self, path: Optional[str] = None, fmt: Optional[str] = None) -> dict:
+        """Load index from file. Auto-detects format from extension."""
+        if path is None:
+            json_path = os.path.join(DEFAULT_INDEX_DIR, "index.json")
+            pkl_path = os.path.join(DEFAULT_INDEX_DIR, "index.pkl")
+            if os.path.exists(json_path):
+                path = json_path
+            elif os.path.exists(pkl_path):
+                path = pkl_path
+            else:
+                raise FileNotFoundError("No index file found in data directory")
+
+        if fmt is None:
+            fmt = "pickle" if path.endswith(".pkl") else "json"
+
+        if fmt == "pickle":
+            with open(path, "rb") as f:
+                data = pickle.load(f)
+        else:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
+        self._validate_index(data)
+
+        self.metadata = data["metadata"]
+        self.index = data["index"]
+        self.documents = data["documents"]
+
+        logger.info(
+            "Index loaded from %s: %d terms, %d documents",
+            path,
+            self.metadata.get("total_terms", 0),
+            self.metadata.get("total_documents", 0),
+        )
+        return data
+
+    def _validate_index(self, data: dict) -> None:
+        """Check that loaded data has the expected structure."""
+        required_keys = {"metadata", "index", "documents"}
+        missing = required_keys - set(data.keys())
+        if missing:
+            raise ValueError(f"Invalid index file: missing keys {missing}")
