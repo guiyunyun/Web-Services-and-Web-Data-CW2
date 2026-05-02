@@ -27,7 +27,7 @@ class SearchEngine:
     def _highlight(self, text: str, terms: list[str]) -> str:
         """Highlight search terms in text with ANSI bold yellow."""
         for term in terms:
-            pattern = re.compile(re.escape(term), re.IGNORECASE)
+            pattern = re.compile(r"\b" + re.escape(term) + r"\b", re.IGNORECASE)
             text = pattern.sub(
                 lambda m: f"{HIGHLIGHT}{m.group().upper()}{RESET}", text
             )
@@ -39,12 +39,11 @@ class SearchEngine:
         if not doc_text:
             return ""
 
-        text_lower = doc_text.lower()
         best_pos = len(doc_text)
         for term in terms:
-            pos = text_lower.find(term.lower())
-            if pos != -1 and pos < best_pos:
-                best_pos = pos
+            match = re.search(r"\b" + re.escape(term) + r"\b", doc_text, re.IGNORECASE)
+            if match and match.start() < best_pos:
+                best_pos = match.start()
 
         if best_pos == len(doc_text):
             return ""

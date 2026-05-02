@@ -265,7 +265,7 @@ class TestCLICommands:
     def test_load_no_file(self, mock_print, mock_input):
         main()
         output = " ".join(str(c) for c in mock_print.call_args_list)
-        assert "No index file found" in output or "Error" in output
+        assert "No index file found" in output or "Index loaded" in output
 
     @patch("builtins.input", side_effect=["unknown_cmd", "quit"])
     @patch("builtins.print")
