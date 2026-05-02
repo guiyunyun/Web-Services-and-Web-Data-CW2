@@ -59,6 +59,44 @@ class SearchEngine:
 
         return self._highlight(snippet, terms)
 
+    def _edit_distance(self, a: str, b: str) -> int:
+        """Damerau-Levenshtein distance with transposition support."""
+        m, n = len(a), len(b)
+        dp = [[0] * (n + 1) for _ in range(m + 1)]
+
+        for i in range(m + 1):
+            dp[i][0] = i
+        for j in range(n + 1):
+            dp[0][j] = j
+
+        for i in range(1, m + 1):
+            for j in range(1, n + 1):
+                cost = 0 if a[i - 1] == b[j - 1] else 1
+                dp[i][j] = min(
+                    dp[i - 1][j] + 1,
+                    dp[i][j - 1] + 1,
+                    dp[i - 1][j - 1] + cost,
+                )
+                if (
+                    i > 1
+                    and j > 1
+                    and a[i - 1] == b[j - 2]
+                    and a[i - 2] == b[j - 1]
+                ):
+                    dp[i][j] = min(dp[i][j], dp[i - 2][j - 2] + 1)
+
+        return dp[m][n]
+
+    def _suggest(self, term: str, max_distance: int = 2) -> list[str]:
+        """Find index terms within edit distance of the query term."""
+        suggestions = []
+        for word in self.indexer.index:
+            dist = self._edit_distance(term, word)
+            if 0 < dist <= max_distance:
+                suggestions.append((word, dist))
+        suggestions.sort(key=lambda x: x[1])
+        return [word for word, _ in suggestions[:3]]
+
     def print_term(self, word: str) -> str:
         """Return formatted inverted index details for a single term."""
         if not self.is_ready():
@@ -70,7 +108,11 @@ class SearchEngine:
 
         entry = self.indexer.get_term(term)
         if entry is None:
-            return f'Term "{term}" not found in the index.'
+            msg = f'Term "{term}" not found in the index.'
+            suggestions = self._suggest(term)
+            if suggestions:
+                msg += f"\nDid you mean: {', '.join(suggestions)}?"
+            return msg
 
         lines = []
         lines.append(f'Term: "{term}"')
@@ -109,13 +151,25 @@ class SearchEngine:
         posting_sets: list[Optional[set[str]]] = []
         term_entries: dict[str, dict] = {}
 
+        missing_terms = []
         for term in terms:
             entry = self.indexer.get_term(term)
             if entry is None:
-                query_str = " ".join(terms)
-                return f'No results found for "{query_str}".'
-            posting_sets.append(set(entry["postings"].keys()))
-            term_entries[term] = entry
+                missing_terms.append(term)
+            else:
+                posting_sets.append(set(entry["postings"].keys()))
+                term_entries[term] = entry
+
+        if missing_terms:
+            query_str = " ".join(terms)
+            msg = f'No results found for "{query_str}".'
+            all_suggestions = []
+            for t in missing_terms:
+                all_suggestions.extend(self._suggest(t))
+            if all_suggestions:
+                unique = list(dict.fromkeys(all_suggestions))
+                msg += f"\nDid you mean: {', '.join(unique[:3])}?"
+            return msg
 
         matched_urls = posting_sets[0]
         for s in posting_sets[1:]:
