@@ -3,11 +3,9 @@
 import re
 import time
 import logging
-from typing import Optional
 
 from src.indexer import Indexer
 
-BOLD = "\033[1m"
 RESET = "\033[0m"
 HIGHLIGHT = "\033[1;33m"
 
@@ -147,7 +145,7 @@ class SearchEngine:
         if not terms:
             return "Please provide at least one search term."
 
-        posting_sets: list[Optional[set[str]]] = []
+        posting_sets: list[set[str]] = []
         term_entries: dict[str, dict] = {}
 
         missing_terms = []

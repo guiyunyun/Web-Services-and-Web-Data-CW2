@@ -1,6 +1,5 @@
 """Interactive CLI for the search engine tool."""
 
-import sys
 import logging
 
 from src.crawler import Crawler
